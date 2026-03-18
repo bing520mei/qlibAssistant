@@ -232,6 +232,7 @@ class ModelCLI:
         for exp_name, rid, series_data in results:
             df = series_data.to_frame(name='score').reset_index()
             df['exp_name'], df['rid'] = exp_name, rid
+            df['weight'] = self.rid_weight.get(rid, 0.0)
             processed_list.append(df)
 
         df_final = pd.concat(processed_list, axis=0, ignore_index=True)
@@ -285,7 +286,6 @@ class ModelCLI:
             date_str = str(date.date())
             # 使用模型权重(基于 rid_rank_icir 归一化得到的 self.rid_weight)计算加权平均分
             group_df = group_df.copy()
-            group_df['weight'] = group_df['rid'].map(self.rid_weight).fillna(0.0)
             ret_df = (
                 group_df.groupby('instrument')
                 .apply(
