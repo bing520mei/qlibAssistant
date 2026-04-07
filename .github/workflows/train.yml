@@ -8,9 +8,9 @@ concurrency:
   cancel-in-progress: false
 
 on:
-  # 定时触发（UTC 时间 12:05 → 北京时间 20:05）
+  # 定时触发（UTC 时间 7:05 → 北京时间 15:05）
   schedule:
-    - cron: '5 12 * * *'
+    - cron: '5 7 * * *'
   # 手动触发
   workflow_dispatch:
 
@@ -64,10 +64,11 @@ jobs:
           fi
 
       # 6. 下载 Qlib 数据（仅在缓存未命中时执行）
+      # 修复：必须先 qlib.init() 再调用 download_data
       - name: Download Qlib data
         if: steps.cache-qlib-data.outputs.cache-hit != 'true'
         run: |
-          python -c "from qlib.data import D; D.download_data('~/.qlib/qlib_data/cn_data', 'csi300')"
+          python -c "import qlib; qlib.init(); from qlib.data import D; D.download_data('~/.qlib/qlib_data/cn_data', 'csi300')"
 
       # 7. 检查是否需要训练（原项目逻辑）
       - name: Check if need to train
