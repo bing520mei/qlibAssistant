@@ -8,32 +8,27 @@ concurrency:
   cancel-in-progress: false
 
 on:
-  # 定时触发（UTC 时间 7:05 → 北京时间 15:05）
   schedule:
-    - cron: '5 7 * * *'
-  # 手动触发
+    - cron: '5 7 * * *'      # UTC 7:05 → 北京时间 15:05
   workflow_dispatch:
 
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 120   # 首次运行数据量大，设置长一些
+    timeout-minutes: 120      # 首次运行数据大，给足时间
 
     steps:
-      # 1. 检出代码（使用 GITHUB_TOKEN，已自动具有写入权限）
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
-      # 2. 设置 Python 环境
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # 3. 缓存 pip 依赖（加速安装）
       - name: Cache pip packages
         uses: actions/cache@v4
         with:
@@ -42,7 +37,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # 4. 缓存 Qlib 数据（避免重复下载，私有仓库缓存上限 2GB）
       - name: Cache Qlib data
         id: cache-qlib-data
         uses: actions/cache@v4
@@ -52,30 +46,23 @@ jobs:
             ~/.cache/qlib
           key: qlib-data-v1-${{ runner.os }}
 
-      # 5. 安装依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
           else
-            echo "⚠️ 未找到 requirements.txt，仅安装 pyqlib"
             pip install pyqlib
           fi
 
-      # 6. 下载 Qlib 数据（仅在缓存未命中时执行）
-      # 修复：直接使用官方仓库的 get_data.py 脚本
+      # ✅ 关键修复：直接下载官方脚本并执行
       - name: Download Qlib data
         if: steps.cache-qlib-data.outputs.cache-hit != 'true'
         run: |
-          # 创建一个临时目录来存放脚本
           mkdir -p scripts
-          # 直接从微软官方仓库下载数据下载脚本
           wget https://raw.githubusercontent.com/microsoft/qlib/main/scripts/get_data.py -O scripts/get_data.py
-          # 运行脚本下载中国A股数据（CSI 300）
           python scripts/get_data.py qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
 
-      # 7. 检查是否需要训练（原项目逻辑）
       - name: Check if need to train
         id: need_train_check
         run: |
@@ -85,39 +72,33 @@ jobs:
           NEED_TRAIN=$(tail -n1 need_train_result.txt)
           echo "NEED_TRAIN_RESULT=$NEED_TRAIN" >> $GITHUB_ENV
 
-      # 8. 如果不需要训练，提前退出
       - name: Exit if not need training
         if: env.NEED_TRAIN_RESULT == 'False'
         run: |
           echo "不需要训练，中断 workflow。"
-          exit 0
+          exit 0          # 改为 0，让 workflow 正常结束
 
-      # 9. 删除旧模型文件
       - name: Delete old model pkl
         run: |
           echo "删掉旧模型"
           rm -f ./model_pkl/*.tar.gz
           git add -u
 
-      # 10. 运行训练脚本
       - name: Run Train
         run: |
           echo "开始训练"
           cd ./roll && python ../script/run.py
 
-      # 11. 列出模型（可选）
       - name: LS model
         run: |
           echo "当前模型列表："
           cd ./roll && python ./roll.py model ls all=1
 
-      # 12. 压缩模型
       - name: Compress model
         run: |
           echo "压缩模型文件"
           cd ./roll && python ./roll.py model compress_mlruns
 
-      # 13. 提交并推送模型文件
       - name: Commit and push model files
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -127,11 +108,9 @@ jobs:
           git pull --rebase origin main
           git push
 
-      # 14. 获取当前日期（用于 Release）
       - name: Get current date
         run: echo "CURRENT_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      # 15. 创建 Release 并上传模型压缩包
       - name: Create Release and upload asset
         uses: softprops/action-gh-release@v2
         with:
