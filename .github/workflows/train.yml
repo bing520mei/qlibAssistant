@@ -17,7 +17,7 @@ on:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 60   # 防止任务卡死
+    timeout-minutes: 60
 
     steps:
       # 1. 检出代码（使用 GITHUB_TOKEN，已自动具有写入权限）
@@ -64,11 +64,11 @@ jobs:
           fi
 
       # 6. 下载 Qlib 数据（仅在缓存未命中时执行）
-      # 修复：必须先 qlib.init() 再调用 download_data
+      # 修复：使用官方推荐的 get_data.py 脚本
       - name: Download Qlib data
         if: steps.cache-qlib-data.outputs.cache-hit != 'true'
         run: |
-          python -c "import qlib; qlib.init(); from qlib.data import D; D.download_data('~/.qlib/qlib_data/cn_data', 'csi300')"
+          python scripts/get_data.py qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
 
       # 7. 检查是否需要训练（原项目逻辑）
       - name: Check if need to train
