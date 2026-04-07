@@ -17,7 +17,7 @@ on:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 120   # 增加超时时间，因为首次下载数据可能较慢
+    timeout-minutes: 120   # 首次运行数据量大，设置长一些
 
     steps:
       # 1. 检出代码（使用 GITHUB_TOKEN，已自动具有写入权限）
@@ -64,11 +64,16 @@ jobs:
           fi
 
       # 6. 下载 Qlib 数据（仅在缓存未命中时执行）
-      # 使用官方推荐的模块方式，无需额外脚本
+      # 修复：直接使用官方仓库的 get_data.py 脚本
       - name: Download Qlib data
         if: steps.cache-qlib-data.outputs.cache-hit != 'true'
         run: |
-          python -m qlib.run.get_data qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
+          # 创建一个临时目录来存放脚本
+          mkdir -p scripts
+          # 直接从微软官方仓库下载数据下载脚本
+          wget https://raw.githubusercontent.com/microsoft/qlib/main/scripts/get_data.py -O scripts/get_data.py
+          # 运行脚本下载中国A股数据（CSI 300）
+          python scripts/get_data.py qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
 
       # 7. 检查是否需要训练（原项目逻辑）
       - name: Check if need to train
@@ -85,7 +90,7 @@ jobs:
         if: env.NEED_TRAIN_RESULT == 'False'
         run: |
           echo "不需要训练，中断 workflow。"
-          exit 1
+          exit 0
 
       # 9. 删除旧模型文件
       - name: Delete old model pkl
