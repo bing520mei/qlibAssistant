@@ -20,11 +20,11 @@ jobs:
     timeout-minutes: 60   # 防止任务卡死
 
     steps:
-      # 1. 检出代码（使用 DOLT_TOKEN 以便后续 push）
+      # 1. 检出代码（使用 GITHUB_TOKEN，已自动具有写入权限）
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.DOLT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
       # 2. 设置 Python 环境
@@ -44,6 +44,7 @@ jobs:
 
       # 4. 缓存 Qlib 数据（避免重复下载，私有仓库缓存上限 2GB）
       - name: Cache Qlib data
+        id: cache-qlib-data
         uses: actions/cache@v4
         with:
           path: |
