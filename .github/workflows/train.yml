@@ -15,7 +15,7 @@ on:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 120      # 首次运行数据大，给足时间
+    timeout-minutes: 120
 
     steps:
       - name: Checkout code
@@ -37,6 +37,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
+      # --- 这是核心改动：直接从GitHub下载预打包数据 ---
       - name: Cache Qlib data
         id: cache-qlib-data
         uses: actions/cache@v4
@@ -46,6 +47,14 @@ jobs:
             ~/.cache/qlib
           key: qlib-data-v1-${{ runner.os }}
 
+      - name: Download Qlib data
+        if: steps.cache-qlib-data.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.qlib/qlib_data/cn_data
+          # 使用wget下载一个公开的数据包
+          wget https://github.com/chenditc/investment_data/releases/download/2024-05-23/qlib_data_cn_1d_latest.tar.gz -O /tmp/qlib_data.tar.gz
+          tar -xzvf /tmp/qlib_data.tar.gz -C ~/.qlib/qlib_data/cn_data
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -54,14 +63,6 @@ jobs:
           else
             pip install pyqlib
           fi
-
-      # ✅ 关键修复：直接下载官方脚本并执行
-      - name: Download Qlib data
-        if: steps.cache-qlib-data.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p scripts
-          wget https://raw.githubusercontent.com/microsoft/qlib/main/scripts/get_data.py -O scripts/get_data.py
-          python scripts/get_data.py qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
 
       - name: Check if need to train
         id: need_train_check
@@ -76,7 +77,7 @@ jobs:
         if: env.NEED_TRAIN_RESULT == 'False'
         run: |
           echo "不需要训练，中断 workflow。"
-          exit 0          # 改为 0，让 workflow 正常结束
+          exit 0
 
       - name: Delete old model pkl
         run: |
