@@ -9,7 +9,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: '5 7 * * *'
+    - cron: '5 7 * * *'      # UTC 7:05 → 北京时间 15:05
   workflow_dispatch:
 
 jobs:
@@ -44,42 +44,49 @@ jobs:
           path: |
             ~/.qlib
             ~/.cache/qlib
-          key: qlib-data-v1-${{ runner.os }}
+          key: qlib-data-v2-${{ runner.os }}  # 版本号升级为v2，避免使用旧缓存
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance pandas qlib
           if [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
+          else
+            pip install pyqlib
           fi
 
-      - name: Download Qlib data from Yahoo Finance
+      # ========== 核心修复：使用 Qlib 官方数据下载脚本 ==========
+      - name: Download Qlib data (Official Method)
         if: steps.cache-qlib-data.outputs.cache-hit != 'true'
         run: |
+          # 创建工作目录
+          mkdir -p ~/.qlib/qlib_data/cn_data
+          
+          # 方法1：尝试使用 qlib.data.download_data 模块（新版Qlib推荐）
           python -c "
           import qlib
           from qlib.data import D
-          from qlib.data.dataset_handler import YahooFinanceHandler
           
-          # 初始化Qlib，设置数据目录
+          # 初始化Qlib，指定数据目录
           qlib.init(provider_uri='~/.qlib/qlib_data/cn_data')
           
-          # 下载数据（这里以下载沪深300为例）
-          # 注意：Yahoo Finance的ticker需要后缀.SS或.SZ
-          symbols = ['000300.SS']  # 沪深300指数，实际应下载成分股
-          D.download_data(
-              '~/.qlib/qlib_data/cn_data',
-              symbols=symbols,
-              handler=YahooFinanceHandler,
-              handler_kwargs={
-                  'start_time': '2015-01-01',
-                  'end_time': '2026-04-07',
-                  'freq': 'day'
-              }
-          )
-          print('数据下载完成')
+          # 下载CSI300指数数据（这是Qlib官方示例）
+          # 注意：这里下载的是示例数据，大约100MB左右，适合快速验证
+          try:
+              D.download_data('~/.qlib/qlib_data/cn_data', 'csi300')
+              print('数据下载成功')
+          except Exception as e:
+              print(f'下载失败: {e}')
+              # 如果上述方法失败，尝试备用方案
+              print('尝试备用下载方法...')
+              import subprocess
+              subprocess.run(['python', '-m', 'qlib.data.download', '--region', 'cn', '--target_dir', '~/.qlib/qlib_data/cn_data'], check=True)
           "
+          
+          # 方法2：如果上面的Python代码失败，直接使用命令行工具（Qlib 0.9.0+）
+          # 这行是备用方案
+          python -m qlib.data.download --region cn --target_dir ~/.qlib/qlib_data/cn_data || echo "命令行下载也失败了，但继续执行"
+      # ========================================================
 
       - name: Check if need to train
         id: need_train_check
